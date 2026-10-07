@@ -1,0 +1,23 @@
+{
+  "name": "kalite-final-kontrol",
+  "version": "1.0.0",
+  "description": "KMK Pack Kalite Final Kontrol (FRI) Sistemi",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "kalite-kontrol",
+    "aql",
+    "fri",
+    "kmk-pack"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KMK Pack - Kalite Final Kontrol (FRI) Sistemi</title>
+  <link rel="stylesheet" href="style.css?v=2.2">
+  <style>
+    /* Ek yardımcı stiller */
+    .aql-alert-box {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .alert-success { background: #ecfdf5; border: 1.5px solid #10b981; color: #065f46; }
+    .alert-warning { background: #fffbeb; border: 1.5px solid #f59e0b; color: #92400e; }
+    .alert-danger { background: #fef2f2; border: 1.5px solid #ef4444; color: #991b1b; }
+    .decision-suggest-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .decision-suggest-badge.pass { background: #10b981; color: #fff; }
+    .decision-suggest-badge.pending { background: #f59e0b; color: #fff; }
+    .decision-suggest-badge.fail { background: #ef4444; color: #fff; }
+    .decision-suggest-badge.taslak { background: #6b7280; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <!-- ========================================================
+       TOP SYSTEM BAR & ERP ENTEGRASYON KONTROLLERİ
+       ======================================================== -->
+  <div class="top-system-bar">
+    <div class="system-title-badge">
+      <span class="status-dot"></span>
+      <strong>KMK PACK QC PORTAL</strong>
+      <span style="color: #9ca3af; font-size: 12px;">| FRI Kalite Güvence Sistemi</span>
+      <span id="sync-status-indicator" style="color: #34d399; font-size: 11.5px; margin-left: 10px;">Bulut Senkronize</span>
+    </div>
+    <div class="system-actions">
+      <button type="button" class="btn-sys" onclick="openArchiveModal()">📋 Denetim Arşivi</button>
+      <button type="button" class="btn-sys" onclick="createNewInspection()">➕ Yeni Denetim</button>
+      <button type="button" class="btn-sys btn-sys-primary" onclick="saveInspectionToServer()">💾 Taslak Kaydet</button>
+      <button type="button" class="btn-sys btn-sys-green" onclick="generatePdfReport()">🖨️ PDF / Yazdır</button>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       KMK PACK HEADER - BİREBİR 3. GÖRSEL FORMATI
+       ======================================================== -->
+  <header class="kmk-header-container">
+    <table class="kmk-header-table">
+      <tr>
+        <!-- Sol: KMK Pack Logo -->
+        <td class="kmk-logo-cell">
+          <img src="/assets/kmk-logo.svg" alt="KMK Pack Logo" class="kmk-logo-svg">
+        </td>
+
+        <!-- Orta: Rapor Başlığı -->
+        <td class="kmk-title-cell">
+          SELF-INSPECTION REPORT<br>
+          FORM/KENDİNDEN KONTROL<br>
+          RAPORU FORMU
+        </td>
+
+        <!-- Sağ: Değiştirilebilir Bilgi Tablosu (Görsel 3) -->
+        <td class="kmk-meta-cell">
+          <table class="kmk-meta-subtable">
+            <tr>
+              <td class="kmk-meta-label">Report No:</td>
+              <td>
+                <input type="text" id="hdr-report-no" class="kmk-meta-input" value="2609FK002" title="Rapor No Değiştirilebilir">
+              </td>
+            </tr>
+            <tr>
+              <td class="kmk-meta-label">Inspection Date:</td>
+              <td>
+                <input type="text" id="hdr-date" class="kmk-meta-input" value="14.09.2026" title="Tarih Değiştirilebilir (GG.AA.YYYY)">
+              </td>
+            </tr>
+            <tr>
+              <td class="kmk-meta-label">Inspector Name:</td>
+              <td>
+                <input type="text" id="hdr-inspector" class="kmk-meta-input" value="Hatice DEMİR" title="Denetçi Adı Değiştirilebilir">
+              </td>
+            </tr>
+            <tr>
+              <td class="kmk-meta-label">QC Leader Name:</td>
+              <td style="display: flex; justify-content: space-between; align-items: center;">
+                <input type="text" id="hdr-qc-leader" class="kmk-meta-input" value="Muhammed KORKMAZ" title="QC Lider Adı Değiştirilebilir" style="flex: 1;">
+                <span class="kmk-page-cell" id="hdr-page-cell">Sayfa 1 / 6</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </header>
+
+  <!-- ========================================================
+       STEPPER / İLERLEME ÇUBUĞU (6 ADIMLI AKIŞ)
+       ======================================================== -->
+  <nav class="stepper-wrapper no-print">
+    <div class="stepper-container">
+      <div class="stepper-step active" data-step="1">
+        <div class="step-circle">1</div>
+        <div class="step-title">Ürün & Sipariş</div>
+      </div>
+      <div class="stepper-step" data-step="2">
+        <div class="step-circle">2</div>
+        <div class="step-title">Depo & Lojistik</div>
+      </div>
+      <div class="stepper-step" data-step="3">
+        <div class="step-circle">3</div>
+        <div class="step-title">AQL & Kusurlar</div>
+      </div>
+      <div class="stepper-step" data-step="4">
+        <div class="step-circle">4</div>
+        <div class="step-title">Ürün & Boyutlar</div>
+      </div>
+      <div class="stepper-step" data-step="5">
+        <div class="step-circle">5</div>
+        <div class="step-title">Kalite Testleri</div>
+      </div>
+      <div class="stepper-step" data-step="6">
+        <div class="step-circle">6</div>
+        <div class="step-title">Karar & Onay</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========================================================
+       ANA İÇERİK - WIZARD PANELLERİ
+       ======================================================== -->
+  <main class="main-content">
+
+    <!-- ====================================================
+         ADIM 1: PRODUCT & ORDER DETAIL (ÜRÜN & SATIŞ DETAYLARI)
+         ==================================================== -->
+    <section class="step-panel active" id="step-panel-1">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">1. Ürün ve Sipariş Detayları</div>
+          <div class="step-header-desc">Sipariş bilgileri, parti büyüklüğü ve ana ürün numune görseli</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #e0f2fe; color: #0369a1;">Adım 1 / 6</span>
+      </div>
+
+      <div class="step-body">
+        <div class="section-banner">
+          <span>PRODUCT & ORDER DETAIL (ÜRÜN & SATIŞ DETAYLARI)</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 320px 1fr; gap: 24px; margin-top: 16px;">
+          <!-- Sol: Ana Ürün Görseli (Zorunlu) -->
+          <div>
+            <div class="photo-card" id="card-main-photo">
+              <div class="photo-card-header">
+                <div class="photo-card-title">
+                  <span>Ürün Ana Görseli</span>
+                  <span class="required-star">* Zorunlu</span>
+                </div>
+                <div class="photo-card-desc">Paketlenmiş referans ürün fotoğrafı</div>
+              </div>
+              <div class="photo-card-body">
+                <div class="photo-upload-zone" onclick="document.getElementById('file-input-mainPhoto').click()">
+                  <span class="photo-upload-icon">📷</span>
+                  <span class="photo-upload-text">Ürün Fotoğrafı Çek / Seç</span>
+                  <span class="photo-upload-hint">Otomatik sıkıştırılır (Max ~300KB)</span>
+                  <input type="file" id="file-input-mainPhoto" accept="image/*" capture="environment" style="display: none;" 
+                         onchange="handlePhotoUpload(this, 'mainPhoto', null)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sağ: Sipariş Bilgileri Formu -->
+          <div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label class="form-label">1. Customer Name (Müşteri Adı): <span class="required-star">*</span></label>
+                <input type="text" id="inp-customer-name" class="form-input" placeholder="Örn: ITX TURKEY">
+              </div>
+              <div class="form-group">
+                <label class="form-label">2. Product Code (Ürün Kodu): <span class="required-star">*</span></label>
+                <input type="text" id="inp-product-code" class="form-input" placeholder="Örn: 90 GSM 28*10*26 TWIST HANDLE PAPER BAG">
+              </div>
+              <div class="form-group">
+                <label class="form-label">3. Customer’s Ref. code (Müşteri Ref Kodu):</label>
+                <input type="text" id="inp-customer-ref" class="form-input" placeholder="Örn: 28*10*26 90 GSM">
+              </div>
+              <div class="form-group">
+                <label class="form-label">4. Product Name (Ürün Adı):</label>
+                <input type="text" id="inp-product-name" class="form-input" placeholder="Örn: TWIST HANDLE PAPER BAG">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">5. Barcode (Barkod):</label>
+              <input type="text" id="inp-barcode" class="form-input" placeholder="Barkod numarası veya -">
+            </div>
+
+            <!-- Adetler Tablosu (Madde 6 & 7) -->
+            <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-top: 12px;">
+              <h4 style="font-size: 13.5px; margin-bottom: 12px; color: #1e293b; font-weight: 800;">6 & 7. Miktar ve Örneklem Bilgileri</h4>
+              <div class="form-grid-2">
+                <div style="border-right: 1px solid #e2e8f0; padding-right: 16px;">
+                  <label class="form-label">6. Inspected Qty (İncelenen Miktar): <span class="required-star">*</span></label>
+                  <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                      <span style="font-size: 11.5px; color: #64748b;">Parçalar (Pieces):</span>
+                      <input type="number" id="inp-inspected-pieces" class="form-input" placeholder="Örn: 20000">
+                    </div>
+                    <div style="flex: 1;">
+                      <span style="font-size: 11.5px; color: #64748b;">Kutular (Cartons):</span>
+                      <input type="number" id="inp-inspected-cartons" class="form-input" placeholder="Örn: 50">
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="form-label">7. Sample Qty (Örnek Miktar) - AQL Otomatik:</label>
+                  <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                      <span style="font-size: 11.5px; color: #64748b;">Parçalar (Pieces):</span>
+                      <input type="number" id="inp-sample-pieces" class="form-input" placeholder="Örn: 315">
+                    </div>
+                    <div style="flex: 1;">
+                      <span style="font-size: 11.5px; color: #64748b;">Kutular (Cartons):</span>
+                      <input type="number" id="inp-sample-cartons" class="form-input" placeholder="Örn: 7">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================
+         ADIM 2: LOGISTIC & PACKAGING (LOJİSTİK VE DEPO)
+         ==================================================== -->
+    <section class="step-panel" id="step-panel-2">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">2. Lojistik ve Paketleme Kontrolleri</div>
+          <div class="step-header-desc">Karton ve palet ölçüm tablosu, depo yerleşimi ve etiket fotoğrafları</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #e0f2fe; color: #0369a1;">Adım 2 / 6</span>
+      </div>
+
+      <div class="step-body">
+        <div class="section-banner">
+          <span>LOGISTIC (LOJİSTİK) ÖLÇÜM TABLOSU</span>
+        </div>
+
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">No</th>
+              <th>Carton & Pallet (Karton ve Palet)</th>
+              <th>Technical File (A)</th>
+              <th>Real Checking (B)</th>
+              <th>Shipping Mark (C)</th>
+              <th>Discrepancy A & B (%)</th>
+              <th>Remarks (Açıklamalar)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">1</td>
+              <td><strong>Carton WEIGHT (Karton Ağırlığı)</strong></td>
+              <td><input type="text" id="log-cw-tech" placeholder="-"></td>
+              <td><input type="text" id="log-cw-real" placeholder="Örn: 15.10" class="num-center"></td>
+              <td><input type="text" id="log-cw-ship" placeholder="Örn: 15.10" class="num-center"></td>
+              <td><input type="text" id="log-cw-disc" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-cw-rem" placeholder="-"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">2</td>
+              <td><strong>Carton DIMENSION (Karton Boyutu)</strong></td>
+              <td><input type="text" id="log-cd-tech" placeholder="Örn: 40*60*35" class="num-center"></td>
+              <td><input type="text" id="log-cd-real" placeholder="Örn: 40*60*35" class="num-center"></td>
+              <td><input type="text" id="log-cd-ship" placeholder="Örn: 40*60*35" class="num-center"></td>
+              <td><input type="text" id="log-cd-disc" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-cd-rem" placeholder="-"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">3</td>
+              <td><strong>Pallet WEIGHT (Palet Ağırlığı)</strong></td>
+              <td><input type="text" id="log-pw-tech" placeholder="-"></td>
+              <td><input type="text" id="log-pw-real" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-pw-ship" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-pw-disc" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-pw-rem" placeholder="-"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">4</td>
+              <td><strong>Pallet DIMENSION (Palet Boyutu)</strong></td>
+              <td><input type="text" id="log-pd-tech" placeholder="Örn: 100*120" class="num-center"></td>
+              <td><input type="text" id="log-pd-real" placeholder="Örn: 100*120" class="num-center"></td>
+              <td><input type="text" id="log-pd-ship" placeholder="Örn: 100*120" class="num-center"></td>
+              <td><input type="text" id="log-pd-disc" placeholder="-" class="num-center"></td>
+              <td><input type="text" id="log-pd-rem" placeholder="-"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">5</td>
+              <td><strong>CARTON BARCODE (Karton Barkodu)</strong></td>
+              <td colspan="5"><input type="text" id="log-carton-barcode" placeholder="Karton barkod numarası" style="font-weight: 700; color: #1e3a8a;"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">6</td>
+              <td><strong>PALLET BARCODE (Palet Barkodu)</strong></td>
+              <td colspan="5"><input type="text" id="log-pallet-barcode" placeholder="-"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Depo ve Paketleme Fotoğrafları (Zorunlu 2x2 Grid) -->
+        <div class="section-banner">
+          <span>PICTURES: WAREHOUSE & PACKAGING (DEPO VE PAKETLEME GÖRSELLERİ)</span>
+        </div>
+
+        <div class="photo-grid-2">
+          <!-- Stock Pic -->
+          <div class="photo-card" id="card-photo-stockPic">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Stock Pic (Stok fotoğrafı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Depodaki palet dizilimi ve stok durumu</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-stockPic').click()">
+                <span class="photo-upload-icon">📦</span>
+                <span class="photo-upload-text">Stok Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-stockPic" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'warehouse', 'stockPic')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Selecting Cartons -->
+          <div class="photo-card" id="card-photo-selectingCartons">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Selecting Cartons (Karton Seçimi)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Rastgele seçilen koli açılımı ve dizilimi</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-selectingCartons').click()">
+                <span class="photo-upload-icon">📦</span>
+                <span class="photo-upload-text">Karton Seçim Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-selectingCartons" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'warehouse', 'selectingCartons')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Carton view LOGO -->
+          <div class="photo-card" id="card-photo-cartonViewLogo">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Carton view LOGO (Karton LOGO)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Koli dış yüzeyi ve müşteri logo baskısı</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-cartonViewLogo').click()">
+                <span class="photo-upload-icon">🏷️</span>
+                <span class="photo-upload-text">Koli Logo Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-cartonViewLogo" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'packaging', 'cartonViewLogo')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Shipping Mark -->
+          <div class="photo-card" id="card-photo-shippingMark">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Shipping Mark (Nakliye Marksı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Koli üzerindeki nakliye etiketi detayları</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-shippingMark').click()">
+                <span class="photo-upload-icon">🏷️</span>
+                <span class="photo-upload-text">Shipping Mark Seç / Çek</span>
+                <input type="file" id="file-input-shippingMark" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'packaging', 'shippingMark')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Barcode Scan -->
+          <div class="photo-card" id="card-photo-barcodeScan">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Barcode Scan (Barkod Tarama)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Lazer okutma veya tarayıcı anı fotoğrafı</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-barcodeScan').click()">
+                <span class="photo-upload-icon">📟</span>
+                <span class="photo-upload-text">Barkod Tarama Anı Seç / Çek</span>
+                <input type="file" id="file-input-barcodeScan" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'packaging', 'barcodeScan')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Scan result of barcode -->
+          <div class="photo-card" id="card-photo-scanResult">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Scan result (Tarama Sonucu)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">El terminali/cihaz ekranında okunan barkod</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-scanResult').click()">
+                <span class="photo-upload-icon">📱</span>
+                <span class="photo-upload-text">Cihaz Ekranı Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-scanResult" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'packaging', 'scanResult')">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+         ADIM 3: AQL CHECKLIST & DEFECTS (1. VE 2. GÖRSEL OTOMATİK EŞLEME)
+         ==================================================== -->
+    <section class="step-panel" id="step-panel-3">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">3. AQL Kontrol Listesi ve Bulunan Kusurlar</div>
+          <div class="step-header-desc">Kusur satırlarına girilen değerler üstteki AQL tablosunu anlık ve otomatik doldurur</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #e0f2fe; color: #0369a1;">Adım 3 / 6</span>
+      </div>
+
+      <div class="step-body">
+        <!-- AQL Durum Uyarı Kutusu -->
+        <div id="aql-status-alert" class="aql-alert-box alert-success">
+          ✅ <strong>AQL Durumu:</strong> Kusur sayıları kabul sınırları dahilinde.
+        </div>
+
+        <!-- 2. GÖRSELDEKİ TABLO 3: INSPECTION CHECKLIST & DEFECTS -->
+        <div class="section-banner">
+          <span>3. INSPECTION Checklist & Defects (DENETLEME Kontrol & Hatalar)</span>
+          <span style="font-size: 12px; font-weight: 500; color: #1e3a8a;">* Alt tablodan otomatik toplanır</span>
+        </div>
+
+        <table class="report-table" id="aql-summary-table">
+          <thead>
+            <tr>
+              <th colspan="4" style="background: #dbeafe; color: #1e3a8a;">A. GENERAL level II (Genel Seviye 2)</th>
+              <th colspan="4" style="background: #f3f4f6; color: #374151;">B. SPECIFIC S-3 (Özel Seviye S-3)</th>
+            </tr>
+            <tr>
+              <th style="width: 150px;">Sample qty (Örnek Miktar)</th>
+              <th colspan="3" id="aql-gen-sample-qty" style="font-size: 15px; color: #1e3a8a;">315</th>
+              <th style="width: 150px;">Sample qty (Örnek Miktar)</th>
+              <th colspan="3" id="aql-spec-sample-qty">-</th>
+            </tr>
+            <tr class="th-sub">
+              <th>Defects (Kusurlar)</th>
+              <th>Critical (0)</th>
+              <th>Major (1.5)</th>
+              <th>Minor (4.0)</th>
+              <th>Defects (Kusurlar)</th>
+              <th>Critical (0)</th>
+              <th>Major (1.5)</th>
+              <th>Minor (4.0)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Max Ac (Kabul Sınırı)</strong></td>
+              <td class="num-center" id="aql-max-ac-critical">0</td>
+              <td class="num-center" id="aql-max-ac-major" style="font-weight: 800;">10</td>
+              <td class="num-center" id="aql-max-ac-minor" style="font-weight: 800;">21</td>
+              <td><strong>Max Ac (Kabul)</strong></td>
+              <td class="num-center">0</td>
+              <td class="num-center">0</td>
+              <td class="num-center">0</td>
+            </tr>
+            <tr class="found-row-highlight">
+              <td><strong>Found (Bulundu)</strong> ➔</td>
+              <td class="num-center" id="found-critical" style="font-size: 16px; color: #b91c1c;">0</td>
+              <td class="num-center" id="found-major" style="font-size: 16px; color: #1d4ed8;">10</td>
+              <td class="num-center" id="found-minor" style="font-size: 16px; color: #0284c7;">1</td>
+              <td><strong>Found (Bulundu)</strong></td>
+              <td class="num-center" id="found-spec-crit">-</td>
+              <td class="num-center" id="found-spec-maj">-</td>
+              <td class="num-center" id="found-spec-min">-</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- 1. GÖRSELDEKİ TABLO: B1. GENERAL level II (GENEL seviye 2) -->
+        <div class="section-banner" style="margin-top: 28px;">
+          <span>B1. GENERAL level II (GENEL seviye 2 - Kusur Girişi)</span>
+          <button type="button" class="btn-sys btn-sys-primary" onclick="addDefectRow()">➕ Yeni Kusur Satırı Ekle</button>
+        </div>
+
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">No</th>
+              <th>Details and methods (Detaylar ve Yöntemler)</th>
+              <th colspan="3">Defects found (Qty) (Bulunan Kusurlar)</th>
+              <th>Remarks (Açıklamalar)</th>
+              <th style="width: 50px;">Sil</th>
+            </tr>
+            <tr class="th-sub">
+              <th></th>
+              <th></th>
+              <th style="width: 85px;">critical</th>
+              <th style="width: 85px;">major</th>
+              <th style="width: 85px;">minor</th>
+              <th></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="defect-rows-tbody">
+            <!-- Dinamik Olarak JavaScript ile Dolacak -->
+          </tbody>
+        </table>
+
+        <!-- Specific S-3 Kontrolleri -->
+        <div class="section-banner" style="margin-top: 28px;">
+          <span>SPECIFIC S-3 (Özel Kontroller)</span>
+        </div>
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th style="width: 40px;">No</th>
+              <th>Kontrol Maddesi</th>
+              <th style="width: 150px;">Sonuç</th>
+              <th>Açıklamalar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">1</td>
+              <td><strong>Barcode scan (Barkod taraması)</strong></td>
+              <td>
+                <select id="spec-barcode-res" class="form-select" style="padding: 4px;">
+                  <option value="PASS">PASS (Uygun)</option>
+                  <option value="FAIL">FAIL (Hatalı)</option>
+                  <option value="PENDING">PENDING</option>
+                </select>
+              </td>
+              <td><input type="text" id="spec-barcode-rem" placeholder="Barkod net okundu, sipariş formuyla eşleşti"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">2</td>
+              <td><strong>Dimension check (Boyut kontrolü)</strong></td>
+              <td>
+                <select id="spec-dim-res" class="form-select" style="padding: 4px;">
+                  <option value="PASS">PASS (Uygun)</option>
+                  <option value="FAIL">FAIL (Hatalı)</option>
+                  <option value="PENDING">PENDING</option>
+                </select>
+              </td>
+              <td><input type="text" id="spec-dim-rem" placeholder="Tolerans dahilinde"></td>
+            </tr>
+            <tr>
+              <td style="text-align: center; font-weight: 700;">3</td>
+              <td><strong>Other testing (Diğer testler)</strong></td>
+              <td>
+                <select id="spec-test-res" class="form-select" style="padding: 4px;">
+                  <option value="PASS">PASS (Uygun)</option>
+                  <option value="FAIL">FAIL (Hatalı)</option>
+                  <option value="PENDING">PENDING</option>
+                </select>
+              </td>
+              <td><input type="text" id="spec-test-rem" placeholder="-"></td>
+            </tr>
+          </tbody>
+        </table>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+         ADIM 4: PRODUCTS & SPECIFIC CHECKING (ÜRÜN VE ÖLÇÜMLER)
+         ==================================================== -->
+    <section class="step-panel" id="step-panel-4">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">4. Ürün Görselleri ve Boyut / Gramaj Kontrolleri</div>
+          <div class="step-header-desc">Ürün açıları, onaylı baskı formu, cetvelli boyutlar, terazi tartımları ve deste kontrolleri</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #e0f2fe; color: #0369a1;">Adım 4 / 6</span>
+      </div>
+
+      <div class="step-body">
+        <div class="section-banner">
+          <span>PICTURES: PRODUCTS (ÜRÜN GÖRSELLERİ)</span>
+        </div>
+
+        <div class="photo-grid-2">
+          <!-- Product 1 -->
+          <div class="photo-card" id="card-photo-product1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>PRODUCT 1 (ÜRÜN 1)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Ürünün ön yüz baskı ve kulp görünümü</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-product1').click()">
+                <span class="photo-upload-icon">🛍️</span>
+                <span class="photo-upload-text">Ürün 1 Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-product1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'products', 'product1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Product 2 -->
+          <div class="photo-card" id="card-photo-product2">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>PRODUCT 2 (ÜRÜN 2)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Ürünün arka yüz görünümü</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-product2').click()">
+                <span class="photo-upload-icon">🛍️</span>
+                <span class="photo-upload-text">Ürün 2 Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-product2" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'products', 'product2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Product 3 -->
+          <div class="photo-card" id="card-photo-product3">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>PRODUCT 3 (ÜRÜN 3)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Ürünün körük katlama ve dip yapıştırma detayı</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-product3').click()">
+                <span class="photo-upload-icon">🛍️</span>
+                <span class="photo-upload-text">Ürün 3 Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-product3" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'products', 'product3')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Product and Print Form -->
+          <div class="photo-card" id="card-photo-printForm">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Product & Print Form (Baskı Formu)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Ürün ile onaylı baskı şablonu karşılaştırması</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-printForm').click()">
+                <span class="photo-upload-icon">📄</span>
+                <span class="photo-upload-text">Baskı Formu Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-printForm" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'products', 'printForm')">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Boyut ve Tartım Görselleri -->
+        <div class="section-banner">
+          <span>SPECIFIC CHECKING: DİMENSİON & WEIGHT (BOYUT VE AĞIRLIK KONTROLLERİ)</span>
+        </div>
+
+        <div class="photo-grid-2">
+          <!-- Dimension check 1 (En) -->
+          <div class="photo-card" id="card-photo-dimensionCheck1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Dimension check 1 (En Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Cetvel ile ürün genişlik (en) ölçümü</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dimensionCheck1').click()">
+                <span class="photo-upload-icon">📏</span>
+                <span class="photo-upload-text">En Kontrol Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dimensionCheck1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dimensionCheck1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Dimension check 2 (Körük) -->
+          <div class="photo-card" id="card-photo-dimensionCheck2">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Dimension check 2 (Körük Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Cetvel ile torba körük / yan derinlik ölçümü</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dimensionCheck2').click()">
+                <span class="photo-upload-icon">📏</span>
+                <span class="photo-upload-text">Körük Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dimensionCheck2" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dimensionCheck2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Dimension Check 3 (Boy) -->
+          <div class="photo-card" id="card-photo-dimensionCheck3">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Dimension Check 3 (Boy Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Cetvel ile ürün yükseklik (boy) ölçümü</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dimensionCheck3').click()">
+                <span class="photo-upload-icon">📏</span>
+                <span class="photo-upload-text">Boy Kontrol Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dimensionCheck3" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dimensionCheck3')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Weight Check (Ürün Ağırlığı) -->
+          <div class="photo-card" id="card-photo-weightCheck">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Weight Check (Ağırlık Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Tek ürünün hassas terazideki gramaj göstergesi (Örn: 33.66 g)</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-weightCheck').click()">
+                <span class="photo-upload-icon">⚖️</span>
+                <span class="photo-upload-text">Terazi Gösterge Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-weightCheck" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'weightCheck')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Grammage Check 1 -->
+          <div class="photo-card" id="card-photo-grammageCheck1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Grammage Check 1 (Kesme Aparatı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Numune kesme aparatı ile kağıttan parça alma</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-grammageCheck1').click()">
+                <span class="photo-upload-icon">✂️</span>
+                <span class="photo-upload-text">Numune Kesim Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-grammageCheck1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'grammageCheck1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Grammage Check 2 -->
+          <div class="photo-card" id="card-photo-grammageCheck2">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Grammage Check 2 (Hassas Tartım)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Kesilen numunenin terazi ekranı (Örn: 0.99 g = 99 GSM)</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-grammageCheck2').click()">
+                <span class="photo-upload-icon">⚖️</span>
+                <span class="photo-upload-text">Gramaj Tartım Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-grammageCheck2" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'grammageCheck2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Deck Check -->
+          <div class="photo-card" id="card-photo-deckCheck">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Deck Check (Deste Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Destelenmiş torbaların dizilimi ve düzeni</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-deckCheck').click()">
+                <span class="photo-upload-icon">📚</span>
+                <span class="photo-upload-text">Deste Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-deckCheck" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'deckCheck')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Piece Check -->
+          <div class="photo-card" id="card-photo-pieceCheck">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Piece Check (Adet Kontrolü)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Masa üzeri serim ile adet sayımı doğrulaması</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-pieceCheck').click()">
+                <span class="photo-upload-icon">🔢</span>
+                <span class="photo-upload-text">Adet Sayım Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-pieceCheck" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'pieceCheck')">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+         ADIM 5: KALİTE & LOJİSTİK TESTLERİ
+         ==================================================== -->
+    <section class="step-panel" id="step-panel-5">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">5. Spesifik Kalite ve Lojistik Testleri</div>
+          <div class="step-header-desc">Dinamik test (6 kg / 6100 döngü), Statik test, Katlama mukavemeti, Sallama ve 61 cm Düşme testi</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #e0f2fe; color: #0369a1;">Adım 5 / 6</span>
+      </div>
+
+      <div class="step-body">
+        <div class="section-banner">
+          <span>SPECIFIC TESTING PICTURES (TEST VE DAYANIM GÖRSELLERİ)</span>
+        </div>
+
+        <div class="photo-grid-2">
+          <!-- Carton Weight -->
+          <div class="photo-card" id="card-photo-cartonWeight">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Carton Weight (Koli Tartımı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Baskülde koli tartım fotoğrafı</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-cartonWeight').click()">
+                <span class="photo-upload-icon">⚖️</span>
+                <span class="photo-upload-text">Koli Tartım Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-cartonWeight" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'cartonWeight')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Carton Weight Scale -->
+          <div class="photo-card" id="card-photo-cartonWeightScale">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Carton Weight Display (Baskül Ekranı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Koli ağırlık ekranı (Örn: 15.10 kg)</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-cartonWeightScale').click()">
+                <span class="photo-upload-icon">📟</span>
+                <span class="photo-upload-text">Baskül Ekranı Seç / Çek</span>
+                <input type="file" id="file-input-cartonWeightScale" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'cartonWeightScale')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Test 1 -->
+          <div class="photo-card" id="card-photo-dynamicTest1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Dinamic Test 1 (Dinamik Cihaz)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Dinamik test makinesine asılı 6 kg yüklü ürün</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dynamicTest1').click()">
+                <span class="photo-upload-icon">⚙️</span>
+                <span class="photo-upload-text">Dinamik Cihaz Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dynamicTest1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dynamicTest1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Test 2 -->
+          <div class="photo-card" id="card-photo-dynamicTest2">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Dinamic Test 2 (Sayaç Ekranı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Devotrans sayaç ve periyot ekranı (6100 döngü)</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dynamicTest2').click()">
+                <span class="photo-upload-icon">⏱️</span>
+                <span class="photo-upload-text">Sayaç Ekranı Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dynamicTest2" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dynamicTest2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Static Test -->
+          <div class="photo-card" id="card-photo-staticTest1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Static Test (Statik Askı)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Statik test askı aparatında 6 kg yüklü bekleme</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-staticTest1').click()">
+                <span class="photo-upload-icon">🏋️</span>
+                <span class="photo-upload-text">Statik Askı Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-staticTest1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'staticTest1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Static Test Result -->
+          <div class="photo-card" id="card-photo-staticTestResult">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Test Result (Statik Sonuç)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Statik test bitimi sonrası torbanın deformasyon durumu</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-staticTestResult').click()">
+                <span class="photo-upload-icon">✔️</span>
+                <span class="photo-upload-text">Statik Sonuç Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-staticTestResult" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'staticTestResult')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Tear / Folding Test 1 -->
+          <div class="photo-card" id="card-photo-tearFolding1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Tear / Folding Test 1</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Katlama yerlerinin mukavemet testi 1</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-tearFolding1').click()">
+                <span class="photo-upload-icon">👐</span>
+                <span class="photo-upload-text">Katlama Testi 1 Seç / Çek</span>
+                <input type="file" id="file-input-tearFolding1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'tearFolding1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Tear / Folding Test 2 -->
+          <div class="photo-card" id="card-photo-tearFolding2">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Tear / Folding Test 2</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Katlama yerlerinin mukavemet testi 2</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-tearFolding2').click()">
+                <span class="photo-upload-icon">👐</span>
+                <span class="photo-upload-text">Katlama Testi 2 Seç / Çek</span>
+                <input type="file" id="file-input-tearFolding2" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'tearFolding2')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Shake Test -->
+          <div class="photo-card" id="card-photo-shakeTest1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Shake Test (Sallama Testi)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">Koli sallama testi pozu</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-shakeTest1').click()">
+                <span class="photo-upload-icon">📦</span>
+                <span class="photo-upload-text">Sallama Testi Seç / Çek</span>
+                <input type="file" id="file-input-shakeTest1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'shakeTest1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Drop Test & Result -->
+          <div class="photo-card" id="card-photo-dropTest1">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Drop Test (61 cm Düşme Testi)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">61 cm yükseklikten bırakılma açısı ve düşme anı</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dropTest1').click()">
+                <span class="photo-upload-icon">📐</span>
+                <span class="photo-upload-text">Düşme Testi Seç / Çek</span>
+                <input type="file" id="file-input-dropTest1" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dropTest1')">
+              </div>
+            </div>
+          </div>
+
+          <!-- Drop Test Result -->
+          <div class="photo-card" id="card-photo-dropTestResult" style="grid-column: 1 / -1;">
+            <div class="photo-card-header">
+              <div class="photo-card-title">
+                <span>Drop Test Result (Düşme Sonucu)</span>
+                <span class="required-star">* Zorunlu</span>
+              </div>
+              <div class="photo-card-desc">1 köşe, 3 kenar, 6 panel düşme sonrası koli köşeleri ve ürün durumu</div>
+            </div>
+            <div class="photo-card-body">
+              <div class="photo-upload-zone" onclick="document.getElementById('file-input-dropTestResult').click()">
+                <span class="photo-upload-icon">📦</span>
+                <span class="photo-upload-text">Düşme Testi Sonuç Fotoğrafı Seç / Çek</span>
+                <input type="file" id="file-input-dropTestResult" accept="image/*" capture="environment" style="display: none;" 
+                       onchange="handlePhotoUpload(this, 'specificChecking', 'dropTestResult')">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ====================================================
+         ADIM 6: KUSUR FOTOĞRAFLARI, NİHAİ KARAR VE ONAY
+         ==================================================== -->
+    <section class="step-panel" id="step-panel-6">
+      <div class="step-header">
+        <div>
+          <div class="step-header-title">6. Kusur Görselleri, Nihai Karar ve Onay</div>
+          <div class="step-header-desc">Tespit edilen kusurların etiketli fotoğrafları, PASS/FAIL/PENDING kararı ve resmi imzalar</div>
+        </div>
+        <span class="decision-suggest-badge" style="background: #10b981; color: #fff;">Son Adım (6 / 6)</span>
+      </div>
+
+      <div class="step-body">
+        <!-- Kusur Fotoğrafları Galerisi (Dinamik) -->
+        <div class="section-banner">
+          <span>DEFECTS ON GENERAL CHECKING (KUSUR FOTOĞRAFLARI)</span>
+          <button type="button" class="btn-sys btn-sys-primary" onclick="addDefectPhotoCard()">➕ Kusur Fotoğrafı Ekle</button>
+        </div>
+
+        <div class="photo-grid-2" id="defect-photos-container">
+          <!-- JavaScript ile doldurulacak -->
+        </div>
+
+        <!-- FINAL INSPECTION RESULT -->
+        <div class="section-banner" style="margin-top: 32px;">
+          <span>FINAL INSPECTION RESULT (SON DENETİM SONUCU)</span>
+          <span id="suggested-decision-badge" class="decision-suggest-badge pass">Önerilen: PASS</span>
+        </div>
+
+        <div class="decision-selector">
+          <button type="button" class="decision-btn pass selected" data-decision="PASS">
+            <span>✅ PASS</span>
+            <small style="font-size: 11px; font-weight: normal;">Sevkiyat İçin Uygun</small>
+          </button>
+          <button type="button" class="decision-btn pending" data-decision="PENDING">
+            <span>⚠️ PENDING</span>
+            <small style="font-size: 11px; font-weight: normal;">Müşteri Onayı / Düzeltme Bekleniyor</small>
+          </button>
+          <button type="button" class="decision-btn fail" data-decision="FAIL">
+            <span>❌ FAIL</span>
+            <small style="font-size: 11px; font-weight: normal;">Uygun Değil / Sevkiyat Durduruldu</small>
+          </button>
+        </div>
+
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">GLOBAL COMMENTS (veya BAŞARISIZ olmanın ana nedeni):</label>
+          <textarea id="inp-global-comments" class="form-textarea" rows="3" 
+                    placeholder="Örn: Torba boyu standart olması gerekenden 7 mm kısadır. Taşıma kapasitesine olumsuz etkisi yoktur."></textarea>
+        </div>
+
+        <!-- Remarks for Approval -->
+        <div class="section-banner" style="margin-top: 28px;">
+          <span>Remarks for Approval (Açıklama ve Onay Maddeleri)</span>
+          <button type="button" class="btn-sys btn-sys-primary" onclick="addApprovalRemark()">➕ Not Ekle</button>
+        </div>
+
+        <div id="approval-remarks-container" style="margin-bottom: 20px;">
+          <!-- JavaScript ile dolacak -->
+        </div>
+
+        <!-- Onay ve Sicil Kutuları -->
+        <div style="background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 18px; margin-top: 24px;">
+          <div class="form-grid-2">
+            <div>
+              <label class="form-label">Inspector batch (Denetçi Sicil / Batch No):</label>
+              <input type="text" id="inp-inspector-badge" class="form-input" placeholder="Örn: BATCH-8491">
+            </div>
+            <div>
+              <label class="form-label">QC leader batch (Kalite Lideri Sicil / Batch No):</label>
+              <input type="text" id="inp-qcleader-badge" class="form-input" placeholder="Örn: QC-LDR-104">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================================
+       BOTTOM STICKY NAVIGATION BAR
+       ======================================================== -->
+  <footer class="bottom-nav-bar no-print">
+    <div class="nav-left">
+      <button type="button" id="btn-nav-prev" class="btn-nav btn-nav-prev" onclick="switchStep(currentStepNumber - 1)" style="display: none;">
+        ⬅️ Önceki Adım
+      </button>
+    </div>
+
+    <div class="nav-center">
+      <span>💾 Kayıt Durumu:</span>
+      <span id="sync-status-indicator-footer" style="color: #059669; font-weight: 700;">Otomatik Taslak Aktif</span>
+    </div>
+
+    <div class="nav-right">
+      <button type="button" class="btn-nav btn-nav-save" onclick="saveInspectionToServer()">
+        💾 Taslağı Kaydet
+      </button>
+      <button type="button" id="btn-nav-next" class="btn-nav btn-nav-next" onclick="handleSaveAndNext()">
+        Kaydet ve Devam Et ➔
+      </button>
+      <button type="button" id="btn-nav-complete" class="btn-nav btn-nav-complete" onclick="handleCompleteInspection()" style="display: none;">
+        🎉 Denetimi Tamamla
+      </button>
+    </div>
+  </footer>
+
+  <!-- ========================================================
+       ARŞİV / GEÇMİŞ DENETİMLER LİSTESİ MODALI
+       ======================================================== -->
+  <div class="modal-overlay" id="archive-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">📋 Kayıtlı Final Kontrol Raporları (Arşiv)</div>
+        <button type="button" class="modal-close" onclick="closeModal('archive-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <table class="report-table">
+          <thead>
+            <tr>
+              <th>Rapor No</th>
+              <th>Tarih</th>
+              <th>Müşteri</th>
+              <th>Ürün Kodu</th>
+              <th>Durum</th>
+              <th>Denetçi</th>
+              <th style="text-align: right;">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="archive-tbody">
+            <!-- JavaScript ile doldurulacak -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-sys" onclick="closeModal('archive-modal')">Kapat</button>
+        <button type="button" class="btn-sys btn-sys-primary" onclick="createNewInspection()">➕ Yeni Denetim Oluştur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       GÖRSEL BÜYÜTME ÖNİZLEME MODALI
+       ======================================================== -->
+  <div class="modal-overlay" id="image-preview-modal" onclick="closeModal('image-preview-modal')">
+    <div style="max-width: 90vw; max-height: 90vh; text-align: center;">
+      <img id="preview-modal-img" src="" style="max-width: 100%; max-height: 85vh; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+      <p style="color: #fff; margin-top: 8px; font-size: 13px;">Kapatmak için herhangi bir yere tıklayın</p>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       RESMİ WORD / PDF BASKI RAPOR ALANI
+       ======================================================== -->
+  <div id="printable-report" class="printable-report-container"></div>
+
+  <!-- ========================================================
+       TOAST BİLDİRİMİ
+       ======================================================== -->
+  <div id="toast-notification" class="toast-msg"></div>
+
+  <script src="app.js?v=2.3"></script>
+</body>
+</html>
