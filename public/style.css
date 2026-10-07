@@ -134,11 +134,51 @@ body {
   text-align: center;
   padding: 6px !important;
   background-color: #ffffff;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.kmk-logo-cell:hover {
+  background-color: #f1f5f9;
+}
+
+.header-logo-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
 }
 
 .kmk-logo-svg {
   height: 60px;
   max-width: 200px;
+  display: inline-block;
+  object-fit: contain;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.kmk-logo-cell:hover .kmk-logo-svg {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.logo-change-badge {
+  display: none;
+  position: absolute;
+  bottom: 0px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.88);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.kmk-logo-cell:hover .logo-change-badge {
   display: inline-block;
 }
 

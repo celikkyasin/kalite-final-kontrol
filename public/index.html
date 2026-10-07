@@ -59,9 +59,13 @@
   <header class="kmk-header-container">
     <table class="kmk-header-table">
       <tr>
-        <!-- Sol: KMK Pack Logo -->
-        <td class="kmk-logo-cell">
-          <img src="/assets/kmk-logo.svg" alt="KMK Pack Logo" class="kmk-logo-svg">
+        <!-- Sol: KMK Pack Logo (Tıklanabilir ve Değiştirilebilir) -->
+        <td class="kmk-logo-cell" onclick="triggerLogoUpload()" title="Firma logosunu değiştirmek için tıklayın" style="cursor: pointer;">
+          <div class="header-logo-wrapper">
+            <img id="hdr-logo-img" src="/assets/kmk-logo.svg" alt="Firma Logosu" class="kmk-logo-svg">
+            <span class="logo-change-badge">📷 Değiştir</span>
+          </div>
+          <input type="file" id="hdr-logo-input" accept="image/*" style="display: none;" onchange="handleLogoUpload(this)">
         </td>
 
         <!-- Orta: Rapor Başlığı -->
@@ -1256,6 +1260,6 @@
        ======================================================== -->
   <div id="toast-notification" class="toast-msg"></div>
 
-  <script src="app.js?v=2.3"></script>
+  <script src="app.js?v=2.4"></script>
 </body>
 </html>

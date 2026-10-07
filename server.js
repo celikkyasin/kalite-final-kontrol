@@ -265,7 +265,7 @@ app.post('/api/inspections', (req, res) => {
   res.status(201).json({ success: true, message: 'Yeni kontrol oluşturuldu', data: newInspection });
 });
 
-// 4. Update / Save step of inspection
+// 4. Update / Save step of inspection (lightweight, preserves existing photos if not sent)
 app.put('/api/inspections/:id', (req, res) => {
   const list = getInspections();
   const index = list.findIndex(i => i.id === req.params.id);
@@ -273,10 +273,34 @@ app.put('/api/inspections/:id', (req, res) => {
     return res.status(404).json({ success: false, message: 'Denetim bulunamadı' });
   }
 
-  // Merge updates
+  const existingItem = list[index];
+  const incoming = req.body || {};
+
   const updatedItem = {
-    ...list[index],
-    ...req.body,
+    ...existingItem,
+    ...incoming,
+    header: {
+      ...(existingItem.header || {}),
+      ...(incoming.header || {})
+    },
+    product: {
+      ...(existingItem.product || {}),
+      ...(incoming.product || {}),
+      mainPhoto: incoming.product?.mainPhoto !== undefined ? incoming.product.mainPhoto : existingItem.product?.mainPhoto
+    },
+    logistic: {
+      ...(existingItem.logistic || {}),
+      ...(incoming.logistic || {})
+    },
+    aqlChecklist: {
+      ...(existingItem.aqlChecklist || {}),
+      ...(incoming.aqlChecklist || {})
+    },
+    photos: incoming.photos !== undefined ? incoming.photos : existingItem.photos,
+    finalResult: {
+      ...(existingItem.finalResult || {}),
+      ...(incoming.finalResult || {})
+    },
     updatedAt: new Date().toISOString()
   };
 
@@ -284,6 +308,68 @@ app.put('/api/inspections/:id', (req, res) => {
   saveInspections(list);
 
   res.json({ success: true, message: 'Kayıt güncellendi', data: updatedItem });
+});
+
+// 4b. Update single photo (lightweight, ~50KB per request to prevent Vercel 4.5MB limit)
+app.post('/api/inspections/:id/photo', (req, res) => {
+  const list = getInspections();
+  const index = list.findIndex(i => i.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ success: false, message: 'Denetim bulunamadı' });
+  }
+
+  const { category, photoKey, photoData } = req.body;
+  if (!category) {
+    return res.status(400).json({ success: false, message: 'Kategori belirtilmedi' });
+  }
+
+  if (category === 'header' && photoKey === 'logoUrl') {
+    if (!list[index].header) list[index].header = {};
+    list[index].header.logoUrl = photoData?.url || null;
+  } else if (category === 'mainPhoto') {
+    if (!list[index].product) list[index].product = {};
+    list[index].product.mainPhoto = photoData?.url || null;
+  } else {
+    if (!list[index].photos) list[index].photos = {};
+    if (!list[index].photos[category]) list[index].photos[category] = {};
+    list[index].photos[category][photoKey] = {
+      ...(list[index].photos[category][photoKey] || {}),
+      ...(photoData || {})
+    };
+  }
+
+  list[index].updatedAt = new Date().toISOString();
+  saveInspections(list);
+
+  res.json({ success: true, message: 'Fotoğraf güncellendi' });
+});
+
+// 4c. Update defect photos (lightweight dedicated endpoint)
+app.post('/api/inspections/:id/defect-photo', (req, res) => {
+  const list = getInspections();
+  const index = list.findIndex(i => i.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ success: false, message: 'Denetim bulunamadı' });
+  }
+
+  const { action, defectPhoto, defectIndex, defectPhotos } = req.body;
+  if (!list[index].photos) list[index].photos = {};
+  if (!list[index].photos.defectPhotos) list[index].photos.defectPhotos = [];
+
+  if (action === 'setAll' && Array.isArray(defectPhotos)) {
+    list[index].photos.defectPhotos = defectPhotos;
+  } else if (action === 'add' && defectPhoto) {
+    list[index].photos.defectPhotos.push(defectPhoto);
+  } else if (action === 'update' && defectIndex !== undefined && defectPhoto) {
+    list[index].photos.defectPhotos[defectIndex] = defectPhoto;
+  } else if (action === 'delete' && defectIndex !== undefined) {
+    list[index].photos.defectPhotos.splice(defectIndex, 1);
+  }
+
+  list[index].updatedAt = new Date().toISOString();
+  saveInspections(list);
+
+  res.json({ success: true, message: 'Kusur fotoğrafı güncellendi', defectPhotos: list[index].photos.defectPhotos });
 });
 
 // 5. Image upload endpoint (stores locally or directly accepts base64)

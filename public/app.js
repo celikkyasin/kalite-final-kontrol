@@ -242,6 +242,45 @@ function setupEventListeners() {
 }
 
 // ==========================================
+// 3b. FİRMA LOGOSU YÖNETİMİ (Tıklayarak Değiştirme)
+// ==========================================
+function triggerLogoUpload() {
+  const input = document.getElementById('hdr-logo-input');
+  if (input) input.click();
+}
+
+async function handleLogoUpload(inputEl) {
+  const file = inputEl.files[0];
+  if (!file) return;
+
+  try {
+    showToast('Firma logosu optimize ediliyor...', 'warning');
+    const compResult = await compressImageFile(file, 800, 400, 0.9);
+
+    if (activeInspection) {
+      if (!activeInspection.header) activeInspection.header = {};
+      activeInspection.header.logoUrl = compResult.dataUrl;
+    }
+
+    const logoImg = document.getElementById('hdr-logo-img');
+    if (logoImg) logoImg.src = compResult.dataUrl;
+
+    // Tarayıcı hafızasına varsayılan logo olarak kaydet
+    localStorage.setItem('kmk_custom_logo', compResult.dataUrl);
+
+    // Sunucuya tekil görsel olarak kaydet
+    if (activeInspection) {
+      await saveSinglePhotoToServer('header', 'logoUrl', { url: compResult.dataUrl });
+    }
+
+    showToast('Firma logosu başarıyla güncellendi!', 'success');
+  } catch (err) {
+    console.error('Logo yükleme hatası:', err);
+    showToast('Logo yüklenirken hata oluştu', 'error');
+  }
+}
+
+// ==========================================
 // 4. OTOMATİK AQL VE ÖRNEKLEM HESAPLAMA
 // ==========================================
 function autoCalculateAql(lotSize) {
@@ -624,23 +663,78 @@ function syncInputsToState() {
   activeInspection.finalResult.qcLeaderBadge = document.getElementById('inp-qcleader-badge').value;
 }
 
-// Sunucuya Kaydetme (REST API PUT)
+// Sunucuya Kaydetme (Hafif ve Vercel 4.5MB limitine takılmayan mimari)
 async function saveInspectionToServer() {
   if (!activeInspection) return;
   try {
+    // Form metin verilerini klonla ve devasa base64 fotoğrafları bu istekten ayıkla (~15 KB)
+    const payload = JSON.parse(JSON.stringify(activeInspection));
+    if (payload.product) delete payload.product.mainPhoto;
+    delete payload.photos;
+
     const res = await fetch(`/api/inspections/${activeInspection.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(activeInspection)
+      body: JSON.stringify(payload)
     });
+    
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
     const result = await res.json();
     if (result.success) {
-      activeInspection = result.data;
       updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
+      // Tarayıcı hafızasına güvenli yerel yedek al
+      try {
+        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
+      } catch (e) {}
+    } else {
+      throw new Error(result.message || 'Kayıt başarısız');
     }
   } catch (err) {
     console.error('Kayıt hatası:', err);
     updateSyncStatus('Bağlantı hatası!');
+  }
+}
+
+// Tekil fotoğrafı sunucuya hafif POST olarak kaydetme (~50-80 KB)
+async function saveSinglePhotoToServer(category, photoKey, photoData) {
+  if (!activeInspection) return;
+  try {
+    const res = await fetch(`/api/inspections/${activeInspection.id}/photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, photoKey, photoData })
+    });
+    if (res.ok) {
+      updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
+      try {
+        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('Fotoğraf kayıt hatası:', err);
+  }
+}
+
+// Kusur fotoğraflarını senkronize etme
+async function saveDefectPhotoToServer(action, defectIndex, defectPhoto, defectPhotos) {
+  if (!activeInspection) return;
+  try {
+    const res = await fetch(`/api/inspections/${activeInspection.id}/defect-photo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, defectIndex, defectPhoto, defectPhotos })
+    });
+    if (res.ok) {
+      updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
+      try {
+        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error('Kusur fotoğrafı kayıt hatası:', err);
   }
 }
 
@@ -659,8 +753,8 @@ async function handlePhotoUpload(inputEl, category, photoKey) {
   try {
     showToast('Fotoğraf işleniyor ve optimize ediliyor...', 'warning');
 
-    // İstemci tarafında çözünürlük korunarak sıkıştırma
-    const compResult = await compressImageFile(file, 1600, 1600, 0.8);
+    // İstemci tarafında çözünürlük korunarak optimize sıkıştırma (1200px, 0.72)
+    const compResult = await compressImageFile(file, 1200, 1200, 0.72);
 
     // activeInspection içine doğrudan kaydet
     if (category === 'mainPhoto') {
@@ -674,10 +768,11 @@ async function handlePhotoUpload(inputEl, category, photoKey) {
 
     // UI'daki ilgili kartı güncelle
     renderPhotoCard(category, photoKey, compResult);
-    showToast(`Görsel sıkıştırıldı: ${compResult.origSizeKb} KB ➔ ${compResult.compSizeKb} KB (%${Math.round((1 - compResult.compSizeKb/compResult.origSizeKb)*100)} tasarruf)`, 'success');
+    showToast(`Görsel optimize edildi: ${compResult.origSizeKb} KB ➔ ${compResult.compSizeKb} KB`, 'success');
 
-    // Otomatik arka planda sunucuya kaydet
-    await saveInspectionToServer();
+    // Sunucuya tekil fotoğraf olarak kaydet (~60 KB)
+    const photoPayload = category === 'mainPhoto' ? { url: compResult.dataUrl } : { url: compResult.dataUrl };
+    await saveSinglePhotoToServer(category, photoKey, photoPayload);
   } catch (err) {
     console.error('Fotoğraf yükleme hatası:', err);
     showToast('Fotoğraf optimize edilirken hata oluştu', 'error');
@@ -749,7 +844,7 @@ function removePhoto(category, photoKey) {
     }
   }
   renderPhotoCard(category, photoKey);
-  saveInspectionToServer();
+  saveSinglePhotoToServer(category, photoKey, { url: null });
   showToast('Fotoğraf kaldırıldı', 'warning');
 }
 
@@ -892,35 +987,37 @@ function renderDefectPhotos() {
 
 function addDefectPhotoCard() {
   if (!activeInspection) return;
-  activeInspection.photos.defectPhotos.push({
+  const newCard = {
     id: Date.now(),
     title: 'Major-1 Yeni Kusur',
     type: 'Major',
     url: null,
     remarks: ''
-  });
+  };
+  activeInspection.photos.defectPhotos.push(newCard);
   renderDefectPhotos();
+  saveDefectPhotoToServer('add', null, newCard);
 }
 
 async function handleDefectPhotoUpload(inputEl, idx) {
   const file = inputEl.files[0];
   if (!file) return;
-  const comp = await compressImageFile(file);
+  const comp = await compressImageFile(file, 1200, 1200, 0.72);
   activeInspection.photos.defectPhotos[idx].url = comp.dataUrl;
   renderDefectPhotos();
-  saveInspectionToServer();
+  saveDefectPhotoToServer('update', idx, activeInspection.photos.defectPhotos[idx]);
 }
 
 function updateDefectPhoto(idx, field, val) {
   if (!activeInspection || !activeInspection.photos.defectPhotos[idx]) return;
   activeInspection.photos.defectPhotos[idx][field] = val;
-  saveInspectionToServer();
+  saveDefectPhotoToServer('update', idx, activeInspection.photos.defectPhotos[idx]);
 }
 
 function deleteDefectPhoto(idx) {
   activeInspection.photos.defectPhotos.splice(idx, 1);
   renderDefectPhotos();
-  saveInspectionToServer();
+  saveDefectPhotoToServer('delete', idx);
 }
 
 // ==========================================
@@ -974,6 +1071,12 @@ function renderAll() {
   document.getElementById('hdr-inspector').value = activeInspection.header?.inspectorName || '';
   document.getElementById('hdr-qc-leader').value = activeInspection.header?.qcLeaderName || '';
   document.getElementById('hdr-page-cell').innerText = `Sayfa ${currentStepNumber} / 6`;
+
+  // Header Logo
+  const logoImg = document.getElementById('hdr-logo-img');
+  const savedCustomLogo = localStorage.getItem('kmk_custom_logo');
+  const activeLogo = activeInspection.header?.logoUrl || savedCustomLogo || '/assets/kmk-logo.svg';
+  if (logoImg) logoImg.src = activeLogo;
 
   // Adım 1: Ürün & Sipariş
   const p = activeInspection.product || {};
@@ -1206,11 +1309,13 @@ function generatePdfReport() {
 }
 
 function renderPrintHeader(insp, pageNum, totalPages) {
+  const savedCustomLogo = localStorage.getItem('kmk_custom_logo');
+  const printLogoSrc = insp.header?.logoUrl || savedCustomLogo || '/assets/kmk-logo.svg';
   return `
     <table class="print-table" style="margin-bottom: 5px; border: 1.5px solid #000;">
       <tr>
         <td style="width: 140px; text-align: center; padding: 2px 4px; background: #fff;">
-          <img src="/assets/kmk-logo.svg" style="height: 36px; max-width: 130px; display: block; margin: 0 auto;">
+          <img src="${printLogoSrc}" style="height: 36px; max-width: 130px; display: block; margin: 0 auto; object-fit: contain;">
         </td>
         <td style="text-align: center; font-size: 8.5pt; font-weight: bold; line-height: 1.25; padding: 2px 4px;">
           SELF-INSPECTION REPORT FORM<br>
