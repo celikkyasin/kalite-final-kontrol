@@ -31,6 +31,9 @@ if (!fs.existsSync(uploadsDir)) {
 const bundledDbPath = path.join(__dirname, 'data', 'inspections.json');
 const dbFilePath = path.join(dataDir, 'inspections.json');
 
+const bundledSettingsPath = path.join(__dirname, 'data', 'settings.json');
+const settingsFilePath = path.join(dataDir, 'settings.json');
+
 if (isVercel && !fs.existsSync(dbFilePath) && fs.existsSync(bundledDbPath)) {
   try {
     fs.copyFileSync(bundledDbPath, dbFilePath);
@@ -40,6 +43,16 @@ if (isVercel && !fs.existsSync(dbFilePath) && fs.existsSync(bundledDbPath)) {
 } else if (!fs.existsSync(dbFilePath)) {
   try {
     fs.writeFileSync(dbFilePath, JSON.stringify([]), 'utf-8');
+  } catch (e) {}
+}
+
+if (isVercel && !fs.existsSync(settingsFilePath) && fs.existsSync(bundledSettingsPath)) {
+  try {
+    fs.copyFileSync(bundledSettingsPath, settingsFilePath);
+  } catch (e) {}
+} else if (!fs.existsSync(settingsFilePath)) {
+  try {
+    fs.writeFileSync(settingsFilePath, JSON.stringify({}), 'utf-8');
   } catch (e) {}
 }
 
@@ -71,9 +84,46 @@ function saveInspections(list) {
   fs.writeFileSync(dbFilePath, JSON.stringify(list, null, 2), 'utf-8');
 }
 
+function getSettings() {
+  try {
+    if (fs.existsSync(settingsFilePath)) {
+      return JSON.parse(fs.readFileSync(settingsFilePath, 'utf-8') || '{}');
+    }
+    if (fs.existsSync(bundledSettingsPath)) {
+      return JSON.parse(fs.readFileSync(bundledSettingsPath, 'utf-8') || '{}');
+    }
+  } catch (err) {
+    console.error('Error reading settings:', err);
+  }
+  return {};
+}
+
+function saveSettings(settings) {
+  try {
+    fs.writeFileSync(settingsFilePath, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving settings:', err);
+  }
+}
+
 // ==========================================
 // REST API Endpoints (ERP Entegrasyonuna Uygun)
 // ==========================================
+
+// Global Ayarlar: Şirket Logosu
+app.get('/api/settings/logo', (req, res) => {
+  const settings = getSettings();
+  res.json({ success: true, logoUrl: settings.logoUrl || null });
+});
+
+app.post('/api/settings/logo', (req, res) => {
+  const { logoUrl } = req.body || {};
+  const settings = getSettings();
+  settings.logoUrl = logoUrl || null;
+  settings.updatedAt = new Date().toISOString();
+  saveSettings(settings);
+  res.json({ success: true, message: 'Firma logosu kaydedildi', logoUrl: settings.logoUrl });
+});
 
 // 1. Get all inspections (list view with search & filters)
 app.get('/api/inspections', (req, res) => {
@@ -154,7 +204,8 @@ app.post('/api/inspections', (req, res) => {
       inspectorName: '',
       qcLeaderName: '',
       companyName: 'Kütahya Ambalaj San. ve Tic. A.Ş.',
-      reportTitle: 'SELF-INSPECTION REPORT FORM/KENDİNDEN KONTROL RAPORU FORMU'
+      reportTitle: 'SELF-INSPECTION REPORT FORM/KENDİNDEN KONTROL RAPORU FORMU',
+      logoUrl: getSettings().logoUrl || null
     },
     product: {
       mainPhoto: null,

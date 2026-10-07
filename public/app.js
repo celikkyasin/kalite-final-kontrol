@@ -112,7 +112,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadInitialInspection() {
   try {
-    // Önce sunucudan mevcut kayıtları çek
+    // 1. Önce kayıtlı logoyu uygula
+    const savedLogo = localStorage.getItem('kmk_custom_logo');
+    if (savedLogo) {
+      const logoEl = document.getElementById('hdr-logo-img');
+      if (logoEl) logoEl.src = savedLogo;
+    } else {
+      // Sunucudaki genel logo ayarını kontrol et
+      fetch('/api/settings/logo')
+        .then(r => r.json())
+        .then(res => {
+          if (res.success && res.logoUrl) {
+            saveLogoToLocalStorage(res.logoUrl);
+            const logoEl = document.getElementById('hdr-logo-img');
+            if (logoEl) logoEl.src = res.logoUrl;
+          }
+        })
+        .catch(() => {});
+    }
+
+    // 2. Sunucudan mevcut kayıtları çek
     const res = await fetch('/api/inspections');
     const data = await res.json();
     
@@ -142,6 +161,12 @@ async function createNewInspection() {
       activeInspection = result.data;
       currentStepNumber = 1;
       
+      // Özel logo varsa yeni rapora da aktar
+      const savedLogo = localStorage.getItem('kmk_custom_logo');
+      if (savedLogo && activeInspection.header) {
+        activeInspection.header.logoUrl = savedLogo;
+      }
+
       // Formu temiz verilerle dök ve 1. adıma geç (syncInputsToState yapmadan)
       renderAll();
       switchStep(1, true, true);
@@ -242,8 +267,71 @@ function setupEventListeners() {
 }
 
 // ==========================================
-// 3b. FİRMA LOGOSU YÖNETİMİ (Tıklayarak Değiştirme)
+// 3b. FİRMA LOGOSU YÖNETİMİ (Tıklayarak Değiştirme & Kalıcılık)
 // ==========================================
+async function compressLogoFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+        const maxWidth = 500;
+        const maxHeight = 160;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const isPng = file.type === 'image/png' || file.type === 'image/svg+xml' || (file.name && (file.name.endsWith('.png') || file.name.endsWith('.svg')));
+        const mimeType = isPng ? 'image/png' : 'image/jpeg';
+        const dataUrl = canvas.toDataURL(mimeType, 0.9);
+
+        resolve({ dataUrl, width, height });
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+}
+
+function saveLogoToLocalStorage(logoDataUrl) {
+  try {
+    localStorage.setItem('kmk_custom_logo', logoDataUrl);
+  } catch (e) {
+    console.warn('LocalStorage doldu, eski veriler temizlenip logo kaydediliyor:', e);
+    try {
+      // QuotaExceededError durumunda eski büyük insp_ önbelleklerini temizle
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('insp_')) {
+          localStorage.removeItem(key);
+        }
+      }
+      localStorage.setItem('kmk_custom_logo', logoDataUrl);
+    } catch (err2) {
+      console.error('LocalStorage logo yazılamadı:', err2);
+    }
+  }
+}
+
 function triggerLogoUpload() {
   const input = document.getElementById('hdr-logo-input');
   if (input) input.click();
@@ -255,25 +343,35 @@ async function handleLogoUpload(inputEl) {
 
   try {
     showToast('Firma logosu optimize ediliyor...', 'warning');
-    const compResult = await compressImageFile(file, 800, 400, 0.9);
+    const compResult = await compressLogoFile(file);
+    const logoDataUrl = compResult.dataUrl;
 
+    // 1. Ekrandaki logoyu anında güncelle
+    const logoImg = document.getElementById('hdr-logo-img');
+    if (logoImg) logoImg.src = logoDataUrl;
+
+    // 2. Aktif denetim modeline yaz
     if (activeInspection) {
       if (!activeInspection.header) activeInspection.header = {};
-      activeInspection.header.logoUrl = compResult.dataUrl;
+      activeInspection.header.logoUrl = logoDataUrl;
     }
 
-    const logoImg = document.getElementById('hdr-logo-img');
-    if (logoImg) logoImg.src = compResult.dataUrl;
+    // 3. Tarayıcı hafızasına kalıcı olarak kaydet
+    saveLogoToLocalStorage(logoDataUrl);
 
-    // Tarayıcı hafızasına varsayılan logo olarak kaydet
-    localStorage.setItem('kmk_custom_logo', compResult.dataUrl);
+    // 4. Sunucuya genel ayar olarak kaydet
+    fetch('/api/settings/logo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logoUrl: logoDataUrl })
+    }).catch(e => console.warn('Sunucu logo ayar hatası:', e));
 
-    // Sunucuya tekil görsel olarak kaydet
-    if (activeInspection) {
-      await saveSinglePhotoToServer('header', 'logoUrl', { url: compResult.dataUrl });
+    // 5. Sunucudaki aktif denetime tekil fotoğraf olarak da yaz
+    if (activeInspection && activeInspection.id) {
+      saveSinglePhotoToServer('header', 'logoUrl', { url: logoDataUrl });
     }
 
-    showToast('Firma logosu başarıyla güncellendi!', 'success');
+    showToast('Firma logosu başarıyla güncellendi ve kaydedildi!', 'success');
   } catch (err) {
     console.error('Logo yükleme hatası:', err);
     showToast('Logo yüklenirken hata oluştu', 'error');
@@ -663,6 +761,20 @@ function syncInputsToState() {
   activeInspection.finalResult.qcLeaderBadge = document.getElementById('inp-qcleader-badge').value;
 }
 
+function cacheInspectionLocally(insp) {
+  if (!insp || !insp.id) return;
+  try {
+    // Fotoğrafları ayıklayıp sadece metin/form durumunu yerel yedek olarak sakla (~15 KB)
+    // Böylece 5MB LocalStorage limiti hiçbir zaman dolmaz ve firma logosu güvenle saklanır!
+    const clone = JSON.parse(JSON.stringify(insp));
+    if (clone.product) delete clone.product.mainPhoto;
+    delete clone.photos;
+    localStorage.setItem(`insp_${insp.id}`, JSON.stringify(clone));
+  } catch (e) {
+    // Kota hatasında sessizce geç
+  }
+}
+
 // Sunucuya Kaydetme (Hafif ve Vercel 4.5MB limitine takılmayan mimari)
 async function saveInspectionToServer() {
   if (!activeInspection) return;
@@ -685,10 +797,7 @@ async function saveInspectionToServer() {
     const result = await res.json();
     if (result.success) {
       updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
-      // Tarayıcı hafızasına güvenli yerel yedek al
-      try {
-        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
-      } catch (e) {}
+      cacheInspectionLocally(activeInspection);
     } else {
       throw new Error(result.message || 'Kayıt başarısız');
     }
@@ -709,9 +818,7 @@ async function saveSinglePhotoToServer(category, photoKey, photoData) {
     });
     if (res.ok) {
       updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
-      try {
-        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
-      } catch (e) {}
+      cacheInspectionLocally(activeInspection);
     }
   } catch (err) {
     console.error('Fotoğraf kayıt hatası:', err);
@@ -729,9 +836,7 @@ async function saveDefectPhotoToServer(action, defectIndex, defectPhoto, defectP
     });
     if (res.ok) {
       updateSyncStatus('Kaydedildi (' + new Date().toLocaleTimeString() + ')');
-      try {
-        localStorage.setItem(`insp_${activeInspection.id}`, JSON.stringify(activeInspection));
-      } catch (e) {}
+      cacheInspectionLocally(activeInspection);
     }
   } catch (err) {
     console.error('Kusur fotoğrafı kayıt hatası:', err);
@@ -1072,11 +1177,14 @@ function renderAll() {
   document.getElementById('hdr-qc-leader').value = activeInspection.header?.qcLeaderName || '';
   document.getElementById('hdr-page-cell').innerText = `Sayfa ${currentStepNumber} / 6`;
 
-  // Header Logo
+  // Header Logo (Özel firma logosu her zaman önceliklidir)
   const logoImg = document.getElementById('hdr-logo-img');
   const savedCustomLogo = localStorage.getItem('kmk_custom_logo');
-  const activeLogo = activeInspection.header?.logoUrl || savedCustomLogo || '/assets/kmk-logo.svg';
+  const activeLogo = savedCustomLogo || activeInspection.header?.logoUrl || '/assets/kmk-logo.svg';
   if (logoImg) logoImg.src = activeLogo;
+  if (savedCustomLogo && activeInspection.header) {
+    activeInspection.header.logoUrl = savedCustomLogo;
+  }
 
   // Adım 1: Ürün & Sipariş
   const p = activeInspection.product || {};
@@ -1310,7 +1418,7 @@ function generatePdfReport() {
 
 function renderPrintHeader(insp, pageNum, totalPages) {
   const savedCustomLogo = localStorage.getItem('kmk_custom_logo');
-  const printLogoSrc = insp.header?.logoUrl || savedCustomLogo || '/assets/kmk-logo.svg';
+  const printLogoSrc = savedCustomLogo || insp.header?.logoUrl || '/assets/kmk-logo.svg';
   return `
     <table class="print-table" style="margin-bottom: 5px; border: 1.5px solid #000;">
       <tr>

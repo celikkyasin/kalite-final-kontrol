@@ -5,6 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>KMK Pack - Kalite Final Kontrol (FRI) Sistemi</title>
   <link rel="stylesheet" href="style.css?v=2.2">
+  <script>
+    // Sayfa yüklenirken özel logo varsa eski logoyu hiç göstermeden anında uygula
+    (function() {
+      try {
+        var savedLogo = localStorage.getItem('kmk_custom_logo');
+        if (savedLogo) {
+          document.addEventListener('DOMContentLoaded', function() {
+            var el = document.getElementById('hdr-logo-img');
+            if (el) el.src = savedLogo;
+          });
+        }
+      } catch (e) {}
+    })();
+  </script>
   <style>
     /* Ek yardımcı stiller */
     .aql-alert-box {
